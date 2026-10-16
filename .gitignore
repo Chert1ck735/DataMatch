@@ -1,0 +1,50 @@
+# Python и локальное окружение
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+*.egg-info/
+.ipynb_checkpoints/
+
+# Локальные настройки, ключи и файлы редакторов
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+.agents/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Исходные данные организаторов и производные результаты остаются локально
+/data/
+/DataMatch_Аналитический_трек/
+/configs/local*.yaml
+/configs/local*.yml
+/cache/
+/logs/
+/outputs/
+/artifacts/
+/runs/
+/deliverables/
+*.parquet
+*.pkl
+*.pickle
+*.joblib
+*.log
+
+# Временные файлы
+/tmp/

@@ -1,0 +1,135 @@
+# DATA MATCH — конфигурация воспроизводимого расчёта.
+# Относительные пути разрешаются от корня проекта (каталог над configs/),
+# а не от текущего каталога запуска.
+
+paths:
+  data_dir: ../DataMatch_Аналитический_трек/data
+  test_dir: ../DataMatch_Аналитический_трек/data/test
+  outputs: outputs
+  artifacts: artifacts
+  cache: cache
+  logs: logs
+
+seed: 20261003
+avangard_team_id: T113
+
+data:
+  train_schemes: [v1]         # схемы разметки train для обучения моделей (v2 — стресс-тест)
+  stress_mode: false          # true — разрешить схему, не прошедшую гейт, только как помеченный стресс-тест
+  scheme_gate:                # P010: сопоставимость схемы train со схемой test (задано до просмотра v1/v2 нового прогона)
+    max_js_node: 0.02         # JS (бит) распределения «исход перехода + следующее действие»
+    min_transitions: 1000     # минимум переходов в распределении
+    distributions: [pass, shot, recovery]
+
+splits:
+  outer_frac: 0.20        # внешний блок train
+  inner_k: 5              # K-fold внутренней валидации на 80%
+  stratify: components    # стратификация по компонентам связности графа команд
+
+l0:
+  # Альтернативные метки train-only -> канонические (PDF: receive/carry/rebound -> touch,
+  # intercept -> steal; остальное — решение проекта, см. docs/METHODOLOGY.md)
+  label_map:
+    receive: touch
+    carry: touch
+    rebound: touch
+    receive_failed: touch
+    intercept: steal
+    board_pass_complete: pass_complete
+    board_pass_failed: pass_failed
+    key_pass_complete: pass_complete
+    key_pass_failed: pass_failed
+    duel_contested: duel
+    board_battle_won: duel
+    board_battle_lost: duel
+  carry_min_dist_m: 3.0       # d: смещение подряд идущих событий одного игрока -> ведение
+  label_attach_window_s: 3.0  # метки entry/exit/feed_break привязываются к ближайшему действию
+  rebound_window_s: 3.0       # добивание: dt <= 3 с после броска своей команды
+  entry_window_s: 5.0         # вход в зону за последние k секунд
+  pass_window_s: 3.0          # смещение предыдущего паса
+  max_skaters: 6
+  chunk_matches: 100          # матчей в порции обработки L0 (ограничение пиковой памяти)
+  period_end_tolerance_s: 1.0 # точность отметки конца периода (нормальные периоды: 1200,0–1200,8 с)
+  gates:
+    unclassified_transitions_max: 0.02
+    toi_ratio_min: 0.95
+    toi_ratio_max: 1.00
+    rate_match_coverage_min: 0.95 # ниже — весь матч исключается только из on-ice/rate/RAPM-метрик
+    actor_on_ice_min: 0.98
+
+xg:
+  tuning_folds: [0, 1, 2]     # search/ablation only; folds 3–4 are untouched comparisons
+  ablation_harm_margin: 0.0001 # keep audited PDF features unless stable material harm
+  candidates: [logit_spline, lgbm_mono, ebm, catboost_mono, by_manpower]
+  catboost:
+    iterations: 400
+    learning_rate: 0.03
+    depth: 6
+    l2_leaf_reg: 5.0
+  catboost_grid:
+    depth: [4, 6]
+    learning_rate: [0.03, 0.06]
+    l2_leaf_reg: [3.0, 10.0]
+  lgbm:
+    n_estimators: 400
+    learning_rate: 0.03
+    num_leaves: 15
+    min_child_samples: 100
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.8
+    reg_lambda: 5.0
+  optuna_trials: 8
+  optuna_startup: 3           # стартовые случайные пробы TPE (остальные 5 — адаптивные)
+  grid:
+    num_leaves: [7, 15, 31]
+    learning_rate: [0.03, 0.06]
+    min_child_samples: [50, 200]
+  ece_bins: 10
+  audit_matches: 200          # матчей разработки для аудита независимости признаков от отметки броска
+  audit_deltas: [1.5, 4.0]    # сдвиги отметки броска, с
+
+value:
+  gamma: 1.0
+  # δ по исходной (некалиброванной) марковской V — проверяемый вариант 08.10 (METHODOLOGY 3, правило 5.2).
+  # false — сдаваемый вариант «было»; калиброванная V в любом случае остаётся для гейта калибровки.
+  delta_from_raw: false
+  markov:
+    x_edges: [-31, -26, -20, -14, -7.6, -3, 3, 7.6, 14, 20, 26, 31]
+    y_edges: [-16, -8, -3, 3, 8, 16]
+    prior_strength: 20.0      # псевдонаблюдения при сглаживании к более грубой клетке
+  gbm:
+    n_estimators: 300
+    learning_rate: 0.05
+    num_leaves: 31
+    min_child_samples: 200
+    subsample: 0.7
+    subsample_freq: 1
+    colsample_bytree: 0.8
+
+contrib:
+  turnover_variant: split     # split (вариант 2, телескопируется) | full (вариант 1, VAEP)
+  alpha: 0.5                  # доля потерявшего в варианте 2
+
+shrink:
+  eps_abs: 1.0e-10
+  eps_floor_rel: 1.0e-6
+  jitter_start: 1.0e-6
+  jitter_max: 1.0e-2
+  min_toi_split_min: 5.0      # минимум TOI в каждой половине для оценки моментов
+  reliability_high: 0.7
+  reliability_medium: 0.4
+  # σ², ω² (и Σσ, Σω) оцениваются по игрокам своего амплуа (M1, NNLS по амплуа; METHODOLOGY 5.2).
+  # Решение пользователя 07.10.2026; выбор M1 против k_r — по правдоподобию разностей половин.
+  noise_by_role: true
+
+bootstrap:
+  debug_B: 30
+  final_B: 200
+  time_budget_s: 72000   # бюджет полного бутстрэпа: 200 реплик × ~5–10 мин / 2 процесса > 6 ч по умолчанию
+  n_jobs: 6
+  replicate_workers: 2   # процессы реплик бутстрэпа L6; замер 06.10: ~3–4 ГБ на процесс при 15 ГБ ОЗУ
+
+eval:
+  paired_bootstrap_B: 1000
+  drift_grid: [0.0, 0.05, 0.1, 0.2]

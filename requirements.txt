@@ -1,0 +1,15 @@
+numpy
+pandas
+pyarrow
+scipy
+scikit-learn
+lightgbm
+catboost
+optuna
+interpret-core
+pyyaml
+pytest
+matplotlib
+nbformat
+nbclient
+ipykernel
